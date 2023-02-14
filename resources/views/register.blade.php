@@ -35,7 +35,7 @@
                                 @endif
                             </div>
                             <div class="form-group mb-3">
-                                <input type="text" placeholder="cid" id="cid" class="form-control" name="cid" required>
+                                <input type="file" id="cid" class="form-control" name="cid" required>
                                 @if ($errors->has('cid'))
                                 <span class="text-danger">{{ $errors->first('cid') }}</span>
                                 @endif
@@ -46,8 +46,14 @@
                                 <span class="text-danger">{{ $errors->first('organize') }}</span>
                                 @endif
                             </div>
+                            <div class="form-group mb-3">
+                                <input type="file" id="pic" class="form-control" name="pic" required>
+                                @if ($errors->has('picture'))
+                                <span class="text-danger">{{ $errors->first('picture') }}</span>
+                                @endif
+                            </div>
                             <div class="d-grid mx-auto">
-                                <button type="submit" class="btn btn-dark btn-block">Signin</button>
+                                <button type="submit" class="btn btn-dark btn-block">Register</button>
                             </div>
                         </form>
                     </div>
