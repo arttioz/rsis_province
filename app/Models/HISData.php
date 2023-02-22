@@ -1,0 +1,14 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class HISData extends Model
+{
+    protected $table = "his_query_clean";
+    use HasFactory;
+
+    protected $dates = ["DATE_SERV"];
+}
