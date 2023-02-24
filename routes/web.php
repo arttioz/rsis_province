@@ -19,3 +19,5 @@ Route::get('/', function () {
 });
 
 Route::get('/merge/hosp/{month}', [ProcessController::class, 'mergeRSISinHosp']);
+
+Route::get('/prepare/police/{month}', [ProcessController::class, 'preparePoliceData']);

@@ -5,11 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class ISData extends Model
+class PoliceData extends Model
 {
-    protected $table = "is_clean_final";
+    protected $table = "police_vehicle_final";
     use HasFactory;
-
-    protected $dates = ["hdate","adate"];
+    protected $dates = ['adate'];
     protected $fillable = ["match","is_duplicate"];
 }
