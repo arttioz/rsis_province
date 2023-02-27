@@ -10,6 +10,6 @@ class EclaimData extends Model
     protected $table = "eclaim_clean_final";
     use HasFactory;
 
-    protected $dates = ["adate"];
+    protected $dates = ["adate","birthdate"];
     protected $fillable = ["match","is_duplicate"];
 }

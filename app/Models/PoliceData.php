@@ -11,4 +11,9 @@ class PoliceData extends Model
     use HasFactory;
     protected $dates = ['adate'];
     protected $fillable = ["match","is_duplicate"];
+
+    public function policeEvent(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PoliceEvent::class,"event_id","event_id");
+    }
 }

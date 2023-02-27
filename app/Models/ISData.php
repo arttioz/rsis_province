@@ -10,6 +10,6 @@ class ISData extends Model
     protected $table = "is_clean_final";
     use HasFactory;
 
-    protected $dates = ["hdate","adate"];
+    protected $dates = ["hdate","adate","birth"];
     protected $fillable = ["match","is_duplicate"];
 }
