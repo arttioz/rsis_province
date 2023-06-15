@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class HISData extends Model
 {
-    protected $table = "his_query_clean_final";
+    protected $table = "his_query_clean";
     use HasFactory;
 
     protected $dates = ["DATE_SERV","BIRTH"];

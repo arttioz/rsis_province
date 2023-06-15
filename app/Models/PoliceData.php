@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PoliceData extends Model
 {
-    protected $table = "police_vehicle_final";
+    protected $table = "police_vehicle_clean";
     use HasFactory;
     protected $dates = ['adate'];
     protected $fillable = ["match","is_duplicate"];

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class EclaimData extends Model
 {
-    protected $table = "eclaim_clean_final";
+    protected $table = "eclaim_clean";
     use HasFactory;
 
     protected $dates = ["adate","birthdate"];

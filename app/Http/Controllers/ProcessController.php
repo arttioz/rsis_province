@@ -1,26 +1,17 @@
 <?php
 
 namespace App\Http\Controllers;
-
-use App\Models\Districts;
-
+use App\Models\PrepareMerge;
+use Carbon\Carbon;
 use App\Models\EclaimData;
 use App\Models\HISData;
-use App\Models\IntegrateFinal;
 use App\Models\ISData;
-use App\Models\PoliceData;
-use App\Models\PrepareMerge;
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\PoliceEvent;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
-use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
-
-use function PHPUnit\Framework\isNull;
-
-use DB;
-use Hash;
+use App\Models\PoliceData;
+use Illuminate\Support\Facades\Request;
+use App\Models\IntegrateFinal;
+use mysql_xdevapi\Table;
 
 
 class ProcessController extends Controller
@@ -49,13 +40,56 @@ class ProcessController extends Controller
         $this->vehicleTxt[$truckNum] = "รถบรรทุกเล็กหรือรถตู้";
         $this->vehicleTxt[$bigTruckNum] = "รถบรรทุกหนัก";
         $this->vehicleTxt[$busNum] = "รถโดยสาร";
-
     }
 
 
-    public function mergeRSISinHosp(Request $request, $startDate,$endDate){
+    /**
+     * For Merge HIS, IS, Eclaim, Police
+     * @param Request $request
+     * @param $startDate
+     * @param $endDate
+     * @return void
+     */
+    public function mergeRSIS(Request $request, $startDate, $endDate){
 
-        set_time_limit(300);
+        ob_end_flush();
+
+        echo "Start Process <br>";
+        flush();
+
+        set_time_limit(3000);
+        ini_set('memory_limit', '6144M');
+
+//        PrepareMerge::query()->truncate();
+
+        $startDate = Carbon::parse($startDate);
+        $endDate = Carbon::parse($endDate);
+
+        $is_rows = $this->prepareMergeISData($startDate,$endDate);
+//        $this->checkDuplicateInSameTable($is_rows,ISData::class);
+//        $this->savePrepareData($is_rows);
+
+        $his_rows = $this->prepareMerge43FileData($startDate,$endDate);
+//        $this->checkDuplicateInSameTable($his_rows,HISData::class);
+//        $this->savePrepareData($his_rows);
+
+        $ecliam_rows = $this->prepareEclaimData($startDate,$endDate);
+//        $this->checkDuplicateInSameTable($ecliam_rows,EclaimData::class);
+//        $this->savePrepareData($ecliam_rows);
+
+        $polich_rows = $this->preparePoliceData($startDate,$endDate);
+//        $this->checkDuplicateInSameTable($polich_rows,PoliceData::class);
+//        $this->savePrepareData($polich_rows);
+
+//        $this->mergeDataProcess($is_rows,$his_rows,$polich_rows,$ecliam_rows);
+        $this->writeMergeDataProcess($is_rows,$his_rows,$polich_rows,$ecliam_rows);
+
+        ob_start();
+    }
+
+    public function checkDuplicate($startDate,$endDate){
+
+        set_time_limit(3000);
         ini_set('memory_limit', '6144M');
 
         PrepareMerge::query()->truncate();
@@ -64,27 +98,28 @@ class ProcessController extends Controller
         $endDate = Carbon::parse($endDate);
 
         $is_rows = $this->prepareMergeISData($startDate,$endDate);
-        $this->checkDuplicateInSameTable($is_rows,ISData::class);
+//        $this->checkDuplicateInSameTable($is_rows,ISData::class);
 
         $his_rows = $this->prepareMerge43FileData($startDate,$endDate);
-        $this->checkDuplicateInSameTable($his_rows,HISData::class);
+//        $this->checkDuplicateInSameTable($his_rows,HISData::class);
 
         $ecliam_rows = $this->prepareEclaimData($startDate,$endDate);
-        $this->checkDuplicateInSameTable($ecliam_rows,EclaimData::class);
+//        $this->checkDuplicateInSameTable($ecliam_rows,EclaimData::class);
 
         $polich_rows = $this->preparePoliceData($startDate,$endDate);
-        $this->checkDuplicateInSameTable($polich_rows,PoliceData::class);
+//        $this->checkDuplicateInSameTable($polich_rows,PoliceData::class);
+    }
 
-        $this->savePrepareData($his_rows);
-        $this->savePrepareData($is_rows);
-        $this->savePrepareData($ecliam_rows);
-        $this->savePrepareData($polich_rows);
-
+    private function mergeDataProcess($is_rows,$his_rows,$polich_rows,$ecliam_rows){
 
         $prepare_merge = PrepareMerge::get();
         $size = count($prepare_merge);
 
+        echo "Size: $size <br>";
+        flush();
+
         $isBegin = 0;
+        $hisBegin = 0;
         $policeBegin = 0;
         $eclaimBegin = 0;
         $index = 1;
@@ -99,13 +134,16 @@ class ProcessController extends Controller
             if ($row->table == "is" && $isBegin == 0){
                 $isBegin = $index;
             }
-
-            if ($row->table == "police" && $policeBegin == 0){
-                $policeBegin = $index;
+            if ($row->table == "his" && $hisBegin == 0){
+                $hisBegin = $index;
             }
             if ($row->table == "eclaim" && $eclaimBegin == 0){
                 $eclaimBegin = $index;
             }
+            if ($row->table == "police" && $policeBegin == 0){
+                $policeBegin = $index;
+            }
+
 
             $index++;
         }
@@ -114,8 +152,12 @@ class ProcessController extends Controller
         // Start Match
         for($index = 1; $index < $size ; $index++){
 
+            echo "Index: $index <br>";
+            flush();
+
             $row = $mergeArray[$index]['row'];
             $match = $mergeArray[$index]['match'];
+            $table = $row->table;
 
             $next = $index +1;
 
@@ -124,36 +166,109 @@ class ProcessController extends Controller
                 $matchRow[$row->id][] = $row;
             }
 
+            if ($table == "is"){
+                if($next < $hisBegin){
+                    $next = $hisBegin;
+                }
+            }else  if ($table == "his"){
+                if($next < $eclaimBegin){
+                    $next = $eclaimBegin;
+                }
+            }else  if ($table == "eclaim"){
+                if($next < $policeBegin){
+                    $next = $policeBegin;
+                }
+            }
+
             for($search_i = $next; $search_i <= $size ; $search_i++){
                 $search_r = $mergeArray[$search_i]['row'];
                 $search_m = $mergeArray[$search_i]['match'];
 
-               $check = $this->checkMatch($row,$search_r);
+                $check = $this->checkMatch($row,$search_r);
 
-               if ($check['result'] > 0){
-                   $match[] = $search_r->id;
-                   $search_m[] = $row->id;
-                   $this->updateMatch($row,$search_r,$check['log']);
-                   $this->updateMatch($search_r,$row,$check['log']);
+                if ($check['result'] > 0){
+                    $match[] = $search_r->id;
+                    $search_m[] = $row->id;
+                    $this->updateMatch($row,$search_r,$check['log']);
+                    $this->updateMatch($search_r,$row,$check['log']);
 
-                   if (!array_key_exists($search_r->id,$matchedRowId)){
-                       // Keep Match ID for check
-                       $matchedRowId[$search_r->id] = $search_r->id;
-                       $matchRow[$row->id][] = $search_r;
-                   }
-               }else{
+                    if (!array_key_exists($search_r->id,$matchedRowId)){
+                        // Keep Match ID for check
+                        $matchedRowId[$search_r->id] = $search_r->id;
+                        $matchRow[$row->id][] = $search_r;
+                    }
+                }else{
 
-               }
+                }
                 $mergeArray[$search_i]['match'] = $search_m;
             }
-
             $mergeArray[$index]['match'] = $match;
-
         }
         foreach ($mergeArray as $data){
             $row = $data['row'];
             $row->match_id = implode(",",$data['match']) ;
             $row->save();
+        }
+
+//        $this->writeFinalIntegrate($matchRow,$is_rows,$his_rows,$polich_rows,$ecliam_rows);
+    }
+
+    public function writeMergeDataProcess($is_rows,$his_rows,$polich_rows,$ecliam_rows){
+
+
+        $prepare_merge = PrepareMerge::get();
+        $size = count($prepare_merge);
+
+        echo "Size: $size <br>";
+        flush();
+
+        $index = 1;
+        $mergeArray = [];
+        $matchRow = [];
+        $matchedRowId = [];
+        $rowID = [];
+        foreach ($prepare_merge as $row){
+            $rowID[$index] = $row->id;
+            $mergeArray[$row->id] = [];
+            $mergeArray[$row->id]['row'] = $row;
+            $mergeArray[$row->id]['match'] = [];
+
+            $index++;
+        }
+
+        // Start Match
+        for($index = 1; $index <= $size ; $index++){
+
+            $row_id =  $rowID[$index];
+
+            echo "Index: $index ID: $row_id <br>";
+            flush();
+
+            $row = $mergeArray[$row_id]['row'];
+            $match = $mergeArray[$row_id]['match'];
+
+            $next = $index +1;
+
+            if (!array_key_exists($row->id,$matchedRowId)){
+                $matchRow[$row->id] = [];
+                $matchRow[$row->id][] = $row;
+            }
+
+            $matchData = $row->match_id;
+
+           if (strlen($matchData) > 0){
+
+               $matchArr = explode(",",$matchData);
+
+               foreach ($matchArr as $row_is){
+                   $search_r = $mergeArray[$row_is]['row'];
+                    if (!array_key_exists($search_r->id,$matchedRowId)){
+                        // Keep Match ID for check
+                        $matchedRowId[$search_r->id] = $search_r->id;
+                        $matchRow[$row->id][] = $search_r;
+                    }
+               }
+           }
         }
 
         $this->writeFinalIntegrate($matchRow,$is_rows,$his_rows,$polich_rows,$ecliam_rows);
@@ -169,7 +284,6 @@ class ProcessController extends Controller
         $hisArr = $this->rowsToArrayKey($his_rows);
         $policeArr = $this->rowsToArrayKey($police_rows);
         $eclaimArr = $this->rowsToArrayKey($eclaim_rows);
-
 
         foreach ($matchRow as $mainRows){
             $integrateRow = new IntegrateFinal();
@@ -226,7 +340,6 @@ class ProcessController extends Controller
     }
 
     private function assignValue($finalData,$dataRow,$colName,$dataColName = ""){
-
         if ($dataColName == ""){
             $dataColName = $colName;
         }
@@ -237,7 +350,6 @@ class ProcessController extends Controller
         }
     }
 
-
     private function rowsToArrayKey($rows){
         $arr = [];
         foreach ($rows as $row){
@@ -245,8 +357,6 @@ class ProcessController extends Controller
         }
         return $arr;
     }
-
-
 
     public function updateMatch($row_1,$row_2,$log){
 
@@ -300,7 +410,13 @@ class ProcessController extends Controller
                 $prepareMerge->accdate = $row->accdate;
                 $prepareMerge->hospdate = $row->hospdate;
                 $prepareMerge->hospcode = $row->hospcode;
-                $prepareMerge->save();
+
+                try {
+                    $prepareMerge->save();
+                }catch (\Exception $exception){
+                    dd($prepareMerge,$row);
+                }
+
             }
         }
     }
@@ -363,7 +479,7 @@ class ProcessController extends Controller
 //            02		จักรยานยนต์
 //            03		สามล้อเครื่อง
 //            04		รถเก๋ง
-//            05		ปิกอั๊พ
+//            05		ปิกอั๊พ, รถกระบะ
 //            06		รถบรรทุกหนัก
 //            07		รถพ่วง
 //            08		รถโดยสารสองแถว
@@ -398,8 +514,7 @@ class ProcessController extends Controller
             else if ($code == 8) $vehicle_type = $busNum;           // 08		รถโดยสารสองแถว
             else if ($code == 9) $vehicle_type = $busNum;           // 09		รถโดยสารบัส
             else if ($code == 10) $vehicle_type = $carNum;          // 10		รถแท็กซี่
-            else if ($code == 18) $vehicle_type = $truckTxt;        // 18		รถตู้ทั่วไป
-
+            else if ($code == 18) $vehicle_type = $truckNum;        // 18		รถตู้ทั่วไป
         }
 
         if ($row->table == "eclaim" || $row->table == "police"){
@@ -702,7 +817,7 @@ class ProcessController extends Controller
             $row->is_death = 1;
         }
 
-        $row->name_lenght = strlen($row->NAME);
+        $row->name_lenght = strlen($row->name);
         $row->is_cid_good = ($row->pid != null and strlen($row->pid) > 10);
         $row->cid_num = intval($row->pid);
         $row->cid = $row->cid_num;
@@ -866,8 +981,6 @@ class ProcessController extends Controller
         if (array_key_exists($row->vehicle_type,$this->vehicleTxt)){
             $row->vehicle_1 = $this->vehicleTxt[$row->vehicle_type];
         }
-
-
 
         return  $row;
     }

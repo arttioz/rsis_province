@@ -7,6 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class PoliceEvent extends Model
 {
-    protected $table = "police_events";
+    protected $table = "police_events_clean";
     use HasFactory;
 }
